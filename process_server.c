@@ -16,6 +16,7 @@
 #include<arpa/inet.h>
 #include<sys/wait.h>
 #include<signal.h>
+#include<errno.h>
 void recyle(int num)
 {
     pid_t pid;
@@ -44,11 +45,11 @@ int main(int argc,const char* argv[])
     printf("Start accept ......\n");
 
     //回收PCB
-    struct sigaction act;
-    act.sa_handler=recyle;
-    act.sa_flags=0;
-    sigemptyset(&act.sa_mask);
-    sigaction(SIGCHLD,&act,NULL);
+    //struct sigaction act;
+    //act.sa_handler=recyle;
+    //act.sa_flags=0;
+   // sigemptyset(&act.sa_mask);
+   //sigaction(SIGCHLD,&act,NULL);
 
     struct sockaddr_in client_addr;//客户端地址结构体
     socklen_t cli_len=sizeof(client_addr);//结构体大小
@@ -56,16 +57,21 @@ int main(int argc,const char* argv[])
     {
         int cfd=accept(lfd,(struct sockaddr*)&client_addr,&cli_len);//监听
 
-        if(cfd==-1)//如果连接失败
+        while(cfd==-1&&errno==EINTR)//如果连接失败
         {
-            perror("accept error");
-            exit(1);
+         cfd=accept(lfd,(struct sockaddr*)&client_addr,&cli_len);//监听
+
         }
+        printf("连接成功\n");
+
         pid_t pid=fork();//创建子进程
         if(pid==0)//对于子进程
         {   close(lfd);//关闭lfd文件描述符
+            char ip[64];
+            //printf("客户端IP：%s,端口：%d",inet_ntop(AF_INET,&client_addr.sin_addr.s_addr,ip,sizeof(ip)),ntohs(client_addr.sin_port));
             while(1)//循环接收
             {
+                printf("客户端IP：%s,端口：%d",inet_ntop(AF_INET,&client_addr.sin_addr.s_addr,ip,sizeof(ip)),ntohs(client_addr.sin_port));
                 char buf[1024];
                 int len =read(cfd,buf,sizeof(buf));//从cfd读数据到buf
                 if(len==-1)//如果失败
@@ -82,7 +88,7 @@ int main(int argc,const char* argv[])
                 else//有数据
                 {
                     printf("recv buf:%s\n",buf);
-                    write (cfd,buf,len);
+                    write (cfd,buf,len);//原文发送回去
                 }
             }
             return 0;
